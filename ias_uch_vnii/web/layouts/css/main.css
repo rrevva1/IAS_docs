@@ -17,6 +17,11 @@ body {
     width: 60px !important;
 }
 
+.sidebar.no-transition,
+.main-content.no-transition {
+    transition: none !important;
+}
+
 .sidebar.expanded {
     width: 250px !important;
 }

@@ -43,14 +43,18 @@ $config = [
             ],
         ],
         'db' => $db,
-        /*
         'urlManager' => [
             'enablePrettyUrl' => true,
             'showScriptName' => false,
             'rules' => [
+                'api/<controller:[a-z-]+>/<id:\d+>/<action:[a-z-]+>' => 'api/<controller>/<action>',
+                'api/<controller:[a-z-]+>/<id:\d+>' => 'api/<controller>/view',
+                'api/<controller:[a-z-]+>/<action:[a-z-]+>' => 'api/<controller>/<action>',
+                'api/<controller:[a-z-]+>' => 'api/<controller>/index',
+                'spa/<path:.*>' => 'site/spa',
+                'spa' => 'site/spa',
             ],
         ],
-        */
     ],
     'modules' => [
    'gridview' =>  [

@@ -54,7 +54,10 @@ if (!Yii::$app->user->isGuest && Yii::$app->user->identity) {
         <?php
         // Создаем массив элементов навигации динамически
         $navItems = [
-            ['label' => '<i class="fas fa-home"></i><span class="nav-text">     Главная</span>', 'url' => ['/site/index']],
+            [
+                'label' => '<i class="fas fa-home"></i><span class="nav-text">     Главная</span>',
+                'url' => Yii::$app->user->isGuest ? ['/site/index'] : '/spa',
+            ],
             ['label' => '<i class="fas fa-info-circle"></i><span class="nav-text">    О проекте</span>', 'url' => ['/site/about']],
             ['label' => '<i class="fas fa-envelope"></i><span class="nav-text">    Контакты</span>', 'url' => ['/site/contact']],
         ];
@@ -65,7 +68,7 @@ if (!Yii::$app->user->isGuest && Yii::$app->user->identity) {
             
                 $navItems[] = [
                     'label' => '<i class="fas fa-user"></i><span class="nav-text">Мой профиль</span>',
-                    'url' => ['/users/view', 'id' => Yii::$app->user->id],
+                    'url' => '/spa/profile',
                 ];
             
             
@@ -76,20 +79,20 @@ if (!Yii::$app->user->isGuest && Yii::$app->user->identity) {
             if(Yii::$app->user->identity->isAdministrator()) {
                 $navItems[] = [
                     'label' => '<i class="fas fa-users"></i><span class="nav-text">    Пользователи</span>',
-                    'url' => ['/users/index'],
+                    'url' => '/spa/users',
                 ];
                 $navItems[] = [
                     'label' => '<i class="fas fa-desktop"></i><span class="nav-text">    Учет ТС</span>',
-                    'url' => ['/arm/index'],
+                    'url' => '/spa/arm',
                 ];
             }
                 $navItems[] = [
                     'label' => '<i class="fas fa-file"></i><span class="nav-text">    Заявки</span>',
-                    'url' => ['/tasks/index'],
+                    'url' => '/spa/tasks',
                 ];
                 $navItems[] = [
                     'label' => '<i class="fas fa-bar-chart"></i><span class="nav-text">    Статистика заявок</span>',
-                    'url' => ['/tasks/statistics'],
+                    'url' => '/spa/statistics',
                 ];
             
         }

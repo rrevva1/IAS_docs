@@ -68,16 +68,8 @@ class SiteController extends Controller
         if (Yii::$app->user->isGuest) {
             return $this->redirect(['login']);
         }
-        
-        $user = Yii::$app->user->identity;
-        
-        if ($user->isAdministrator()) {
-            /** Администратор видит список всех пользователей */
-            return $this->redirect(['/users/index']);
-        } else {
-            /** Обычный пользователь видит только свои данные */
-            return $this->redirect(['/users/view', 'id' => $user->id]);
-        }
+
+        return $this->redirect(['spa']);
     }
 
     /**
@@ -155,6 +147,35 @@ class SiteController extends Controller
     public function actionAbout()
     {
         return $this->render('about');
+    }
+
+    /**
+     * SPA entry point (Vue).
+     *
+     * @return string|\yii\web\Response
+     */
+    public function actionSpa()
+    {
+        if (Yii::$app->user->isGuest) {
+            return $this->redirect(['login']);
+        }
+
+        $user = Yii::$app->user->identity;
+        $this->layout = 'spa';
+        $this->view->params['appContext'] = [
+            'appName' => Yii::$app->name,
+            'csrfToken' => Yii::$app->request->csrfToken,
+            'user' => [
+                'id' => $user->id,
+                'full_name' => $user->full_name,
+                'email' => $user->email,
+                'isAdministrator' => $user->isAdministrator(),
+                'isRegularUser' => $user->isRegularUser(),
+            ],
+        ];
+        $this->getView()->title = 'IAS UCH VNII';
+
+        return $this->render('spa');
     }
     
     /**
