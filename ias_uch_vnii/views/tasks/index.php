@@ -21,6 +21,31 @@ $this->params['breadcrumbs'] = []; // Убираем хлебные крошки
 // Определяем, является ли пользователь администратором
 $isAdmin = !Yii::$app->user->isGuest && Yii::$app->user->identity && Yii::$app->user->identity->isAdmin();
 
+// Карта статусов (цвет, иконка и название) для отображения в гриде и диаграмме
+$statusNames = [];
+foreach (\app\models\dictionaries\DicTaskStatus::find()->orderBy(['sort_order' => SORT_ASC])->all() as $s) {
+    $colors = [
+        'new' => '#28a745',
+        'in_progress' => '#ffc107',
+        'on_hold' => '#6c757d',
+        'resolved' => '#17a2b8',
+        'closed' => '#17a2b8',
+        'cancelled' => '#dc3545',
+    ];
+    $icons = [
+        'new' => 'glyphicon-folder-open',
+        'in_progress' => 'glyphicon-cog',
+        'resolved' => 'glyphicon-ok',
+        'closed' => 'glyphicon-ok',
+        'cancelled' => 'glyphicon-remove',
+    ];
+    $statusNames[$s->id] = [
+        'name' => $s->status_name,
+        'color' => $colors[$s->status_code] ?? '#6c757d',
+        'icon' => $icons[$s->status_code] ?? 'glyphicon-tag',
+    ];
+}
+
 // Базовые колонки для всех пользователей
 $gridColumns = [
     // 1. Чекбокс для выбора (только для админов)
@@ -262,13 +287,6 @@ $totalTasks = 0;
 foreach ($statusStats as $stat) {
     $statusData[$stat['status_id']] = $stat['count'];
     $totalTasks += $stat['count'];
-}
-
-$statusNames = [];
-foreach (\app\models\dictionaries\DicTaskStatus::find()->orderBy(['sort_order' => SORT_ASC])->all() as $s) {
-    $colors = ['new' => '#28a745', 'in_progress' => '#ffc107', 'on_hold' => '#6c757d', 'resolved' => '#17a2b8', 'closed' => '#17a2b8', 'cancelled' => '#dc3545'];
-    $icons = ['new' => 'glyphicon-folder-open', 'in_progress' => 'glyphicon-cog', 'resolved' => 'glyphicon-ok', 'closed' => 'glyphicon-ok', 'cancelled' => 'glyphicon-remove'];
-    $statusNames[$s->id] = ['name' => $s->status_name, 'color' => $colors[$s->status_code] ?? '#6c757d', 'icon' => $icons[$s->status_code] ?? 'glyphicon-tag'];
 }
 ?>
 <div class="create-task-wrapper">

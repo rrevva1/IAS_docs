@@ -13,6 +13,8 @@ class ArmSearch extends Model
 {
     public $id;
     public $name;
+    /** @var string|null Описание оборудования для фильтрации */
+    public $description;
     public $responsible_user_id;
     public $location_id;
     public $inventory_number;
