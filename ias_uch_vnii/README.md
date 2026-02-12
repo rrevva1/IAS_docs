@@ -40,13 +40,15 @@ npm install
 cp -r node_modules/ag-grid-community web/ag-grid-community
 
 # 3. Настройка базы данных
-# Вариант 1 (рекомендуется): из корня репозитория TZ выполнить scripts\setup_ias_vniic_db.cmd
-# Вариант 2 вручную — целевая БД IAS_VNIIC, схема tech_accounting:
-#   psql -U postgres -d postgres -c "CREATE DATABASE \"IAS_VNIIC\" WITH ENCODING 'UTF8' TEMPLATE template0;"
-#   psql -U postgres -d "IAS_VNIIC" -f ../scripts/create_ias_uch_db_test.sql
-# Приложение настроено на dbname=IAS_VNIIC и search_path=tech_accounting (config/db.php).
+# Вариант 1 (рекомендуется): из корня TZ восстановить БД из дампа (имя БД ias_vniic — один конфиг на всех ОС):
+#   macOS/Linux: PGPASSWORD=12345 ./scripts/create_and_restore_ias_vniic.sh
+#   Windows: создать БД ias_vniic, затем psql -d ias_vniic -f db\IAS_VNIIC_dump.sql
+# Вариант 2 вручную — пустая схема из DDL:
+#   psql -U postgres -d postgres -c "CREATE DATABASE ias_vniic WITH ENCODING 'UTF8' TEMPLATE template0;"
+#   psql -U postgres -d ias_vniic -f ../scripts/create_ias_uch_db_test.sql
+# Приложение настроено на dbname=ias_vniic и search_path=tech_accounting (config/db.php).
 
-# 3.1. Если БД уже развёрнута (IAS_VNIIC создана, схема tech_accounting применена)
+# 3.1. Если БД уже развёрнута (ias_vniic создана, схема tech_accounting применена)
 #      — шаг 3 можно не повторять. Дальше нужен только первый пользователь (см. ниже).
 
 # 3.2. Первый пользователь (в схеме нет пользователей по умолчанию)

@@ -27,32 +27,24 @@ npm -v
 
 ### 2.2. Создание БД и применение схемы
 
-**Вариант А — новая БД IAS_VNIIC (рекомендуется):**
+**БД ias_vniic (рекомендуется):**
 
-Из корня репозитория TZ:
-
-```cmd
-scripts\setup_ias_vniic_db.cmd
-```
-
-Скрипт создаёт базу `IAS_VNIIC` (если её ещё нет) и применяет схему из `scripts\create_ias_uch_db_test.sql` (схема PostgreSQL: `tech_accounting`). Учётные данные по умолчанию: `postgres` / `12345`. Приложение настроено на эту БД в `config/db.php` (dbname=IAS_VNIIC, search_path=tech_accounting).
-
-**Вариант Б — прежняя БД ias_uch_vnii (дамп):**
-
-Если используется старый дамп (таблицы в public):
-
-```cmd
-scripts\setup_ias_uch_vnii_db.cmd
-```
-
-Скрипт создаёт базу `ias_uch_vnii` и восстанавливает дамп из `ias_uch_vnii\ias_uch_vnii_public_dump.sql`. Для работы с этой БД в `config/db.php` укажите `dbname=ias_uch_vnii` и уберите или закомментируйте `on afterOpen` (search_path).
-
-**Создание IAS_VNIIC вручную:**
+Имя БД в нижнем регистре — одинаково на Mac и Windows, в `config/db.php` везде `dbname=ias_vniic`. Восстановление из дампа. Из корня репозитория TZ в cmd/PowerShell:
 
 ```cmd
 set PGPASSWORD=12345
-psql -h localhost -U postgres -d postgres -c "CREATE DATABASE \"IAS_VNIIC\" WITH ENCODING 'UTF8' TEMPLATE template0;"
-psql -h localhost -U postgres -d "IAS_VNIIC" -f "d:\Projects\TZ\scripts\create_ias_uch_db_test.sql"
+psql -h localhost -U postgres -d postgres -c "CREATE DATABASE ias_vniic WITH ENCODING 'UTF8' TEMPLATE template0;"
+psql -h localhost -U postgres -d ias_vniic -f "db\IAS_VNIIC_dump.sql"
+```
+
+(Путь к дампу замените на свой, например `d:\Projects\TZ\db\IAS_VNIIC_dump.sql`.) Приложение настроено на эту БД в `config/db.php` (dbname=ias_vniic, search_path=tech_accounting).
+
+**Создание ias_vniic из DDL-схемы (без дампа):**
+
+```cmd
+set PGPASSWORD=12345
+psql -h localhost -U postgres -d postgres -c "CREATE DATABASE ias_vniic WITH ENCODING 'UTF8' TEMPLATE template0;"
+psql -h localhost -U postgres -d ias_vniic -f "scripts\create_ias_uch_db_test.sql"
 ```
 
 ## 3. Настройка приложения
@@ -61,7 +53,7 @@ psql -h localhost -U postgres -d "IAS_VNIIC" -f "d:\Projects\TZ\scripts\create_i
 
 Файл `config/db.php` настроен на целевую БД:
 
-- `dsn`: `pgsql:host=localhost;dbname=IAS_VNIIC`
+- `dsn`: `pgsql:host=localhost;dbname=ias_vniic`
 - `username`: `postgres`
 - `password`: `12345`
 - при открытии соединения устанавливается `search_path=tech_accounting`
