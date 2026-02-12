@@ -8,6 +8,11 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# Артефакты IDE и сгенерированные файлы
+**/.metadata/
+**/*.class
+xlsx_extract/
+
 # ias_uch_vnii: зависимости и сгенерированные файлы
 ias_uch_vnii/vendor/
 ias_uch_vnii/node_modules/
