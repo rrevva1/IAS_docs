@@ -17,11 +17,13 @@ use yii\widgets\ActiveForm;
     <?php $form = ActiveForm::begin(); ?>
 
     <?= $form->field($model, 'inventory_number')->textInput(['maxlength' => true]) ?>
+    <?= $form->field($model, 'serial_number')->textInput(['maxlength' => true]) ?>
 
     <?= $form->field($model, 'name')->textInput([
         'maxlength' => true,
         'placeholder' => 'Например: ПК Lenovo ThinkCentre M720',
     ]) ?>
+    <?= $form->field($model, 'equipment_type')->textInput(['maxlength' => true, 'placeholder' => 'Системный блок, Ноутбук, Монитор...']) ?>
 
     <?= $form->field($model, 'responsible_user_id')->dropDownList($users, [
         'prompt' => 'Не закреплять',
@@ -32,6 +34,11 @@ use yii\widgets\ActiveForm;
     ]) ?>
 
     <?= $form->field($model, 'status_id')->dropDownList($statuses ?? [], ['prompt' => '']) ?>
+
+    <?= $form->field($model, 'supplier')->textInput(['maxlength' => true]) ?>
+    <?= $form->field($model, 'purchase_date')->input('date') ?>
+    <?= $form->field($model, 'commissioning_date')->input('date') ?>
+    <?= $form->field($model, 'warranty_until')->input('date') ?>
 
     <?= $form->field($model, 'description')->textarea([
         'rows' => 4,

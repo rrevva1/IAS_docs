@@ -29,10 +29,13 @@ use yii\web\UploadedFile;
  * @property Users $requester
  * @property Users $executor
  * @property DeskAttachments[] $taskAttachments через task_attachments
+ * @property Equipment[] $equipments через task_equipment
  */
 class Tasks extends ActiveRecord
 {
     public $uploadFiles;
+    /** @var array ID выбранных активов (для формы) */
+    public $equipment_ids = [];
 
     public static function tableName()
     {
@@ -65,6 +68,7 @@ class Tasks extends ActiveRecord
             [['requester_id'], 'exist', 'targetClass' => Users::class, 'targetAttribute' => ['requester_id' => 'id']],
             [['executor_id'], 'exist', 'targetClass' => Users::class, 'targetAttribute' => ['executor_id' => 'id'], 'skipOnEmpty' => true],
             [['uploadFiles'], 'file', 'skipOnEmpty' => true, 'extensions' => 'png, jpg, jpeg, gif, pdf, doc, docx, xls, xlsx, txt', 'maxFiles' => 10],
+            [['equipment_ids'], 'each', 'rule' => ['integer']],
         ];
     }
 
@@ -118,6 +122,17 @@ class Tasks extends ActiveRecord
     {
         return $this->hasMany(DeskAttachments::class, ['id' => 'attachment_id'])
             ->viaTable('task_attachments', ['task_id' => 'id']);
+    }
+
+    public function getEquipments()
+    {
+        return $this->hasMany(Equipment::class, ['id' => 'equipment_id'])
+            ->viaTable('task_equipment', ['task_id' => 'id']);
+    }
+
+    public function getTaskEquipments()
+    {
+        return $this->hasMany(TaskEquipment::class, ['task_id' => 'id']);
     }
 
     public function getAttachmentsArray()
@@ -198,6 +213,32 @@ class Tasks extends ActiveRecord
             }
         }
         return true;
+    }
+
+    public function afterFind()
+    {
+        parent::afterFind();
+        $this->equipment_ids = $this->getTaskEquipments()->select('equipment_id')->column();
+    }
+
+    public function afterSave($insert, $changedAttributes)
+    {
+        parent::afterSave($insert, $changedAttributes);
+        if ($this->id && is_array($this->equipment_ids)) {
+            TaskEquipment::deleteAll(['task_id' => $this->id]);
+            $userId = Yii::$app->user->isGuest ? null : Yii::$app->user->id;
+            foreach (array_filter(array_map('intval', $this->equipment_ids)) as $equipmentId) {
+                if ($equipmentId <= 0) {
+                    continue;
+                }
+                $te = new TaskEquipment();
+                $te->task_id = $this->id;
+                $te->equipment_id = $equipmentId;
+                $te->relation_type = 'related';
+                $te->linked_by = $userId;
+                $te->save(false);
+            }
+        }
     }
 
     public static function AllTasks()

@@ -18,11 +18,16 @@ class ArmSearch extends Model
     public $responsible_user_id;
     public $location_id;
     public $inventory_number;
+    /** @var int|null Статус оборудования */
+    public $status_id;
+    /** @var int|bool Показать архивные (0 = нет по умолчанию) */
+    public $is_archived = 0;
 
     public function rules()
     {
         return [
-            [['id', 'responsible_user_id', 'location_id'], 'integer'],
+            [['id', 'responsible_user_id', 'location_id', 'status_id'], 'integer'],
+            [['is_archived'], 'boolean'],
             [['name', 'description', 'inventory_number'], 'safe'],
         ];
     }
@@ -55,6 +60,8 @@ class ArmSearch extends Model
             'equipment.id' => $this->id,
             'responsible_user_id' => $this->responsible_user_id,
             'location_id' => $this->location_id,
+            'status_id' => $this->status_id,
+            'equipment.is_archived' => $this->is_archived,
         ]);
 
         $query->andFilterWhere(['ilike', 'equipment.name', $this->name])

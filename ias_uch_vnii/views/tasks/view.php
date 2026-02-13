@@ -90,6 +90,46 @@ $this->registerJs("var statusChangeUrl = '" . Url::to(['change-status', 'id' => 
         ],
     ]) ?>
 
+    <?php
+    $taskHistory = \app\models\entities\TaskHistory::find()
+        ->where(['task_id' => $model->id])
+        ->with('changedByUser')
+        ->orderBy(['changed_at' => SORT_DESC])
+        ->limit(30)
+        ->all();
+    if (!empty($taskHistory)):
+    ?>
+    <h4>История изменений</h4>
+    <table class="table table-bordered table-striped">
+        <thead><tr><th>Дата</th><th>Поле</th><th>Было</th><th>Стало</th><th>Кто</th></tr></thead>
+        <tbody>
+            <?php foreach ($taskHistory as $h): ?>
+            <tr>
+                <td><?= Yii::$app->formatter->asDatetime($h->changed_at) ?></td>
+                <td><?= Html::encode($h->field_name) ?></td>
+                <td><?= Html::encode(mb_substr((string)$h->old_value, 0, 80)) ?></td>
+                <td><?= Html::encode(mb_substr((string)$h->new_value, 0, 80)) ?></td>
+                <td><?= $h->changedByUser ? Html::encode($h->changedByUser->full_name) : '—' ?></td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php endif; ?>
+
+    <?php
+    $equipments = $model->getEquipments()->all();
+    if (!empty($equipments)):
+    ?>
+    <h4>Связанные активы</h4>
+    <ul class="list-group">
+        <?php foreach ($equipments as $eq): ?>
+        <li class="list-group-item">
+            <?= Html::a(Html::encode($eq->inventory_number . ' — ' . ($eq->name ?: '')), ['/arm/view', 'id' => $eq->id], ['target' => '_blank']) ?>
+        </li>
+        <?php endforeach; ?>
+    </ul>
+    <?php endif; ?>
+
     <!-- Быстрое управление -->
     <div class="row mt-4">
         <div class="col-md-6">

@@ -4,8 +4,9 @@ use yii\helpers\Html;
 use yii\widgets\ActiveForm;
 
 /* @var $this yii\web\View */
-/* @var $model app\models\Tasks */
+/* @var $model app\models\entities\Tasks */
 /* @var $form yii\widgets\ActiveForm */
+/* @var array $equipmentList [id => label] для выбора активов */
 
 // Подключаем CSS и JS для модальной формы
 $this->registerCssFile('@web/css/tasks/form-modal.css', ['depends' => [\yii\web\YiiAsset::class]]);
@@ -35,6 +36,20 @@ $this->registerJsFile('@web/js/tasks/form-modal.js', ['depends' => [\yii\web\Jqu
     </div>
 
     
+    <?php if (!empty($equipmentList)): ?>
+    <div class="form-section">
+        <div class="section-header">
+            <i class="glyphicon glyphicon-hdd"></i>
+            <h5>Связанные активы (техника)</h5>
+        </div>
+        <?= $form->field($model, 'equipment_ids')->listBox($equipmentList, [
+            'multiple' => true,
+            'size' => 6,
+            'options' => ['class' => 'form-control'],
+        ])->label('Выберите один или несколько активов') ?>
+    </div>
+    <?php endif; ?>
+
     <div class="form-section">
         <div class="section-header">
             <i class="glyphicon glyphicon-paperclip"></i>

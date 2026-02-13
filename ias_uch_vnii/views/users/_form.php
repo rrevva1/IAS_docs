@@ -22,7 +22,13 @@ $roleItems = Roles::getList();
     <?= $form->field($model, 'password_plain')->passwordInput(['maxlength' => true]) ?>
 
     <div class="form-group">
-        <?= Html::submitButton('Save', ['class' => 'btn btn-success']) ?>
+        <?= Html::submitButton(
+            $model->isNewRecord ? 'Создать' : 'Сохранить',
+            [
+                'class' => 'btn btn-success',
+                'title' => $model->isNewRecord ? 'Создать пользователя и сохранить в БД' : 'Сохранить изменения в БД',
+            ]
+        ) ?>
     </div>
 
     <?php ActiveForm::end(); ?>

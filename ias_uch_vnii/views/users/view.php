@@ -28,18 +28,23 @@ if (Yii::$app->user->identity && Yii::$app->user->identity->isAdministrator()) {
     <?php if (Yii::$app->user->identity && Yii::$app->user->identity->isAdministrator()): ?>
         <!-- Кнопки для администратора -->
         <p>
-            <?= Html::a('Редактировать', ['update', 'id' => $model->id], ['class' => 'btn btn-primary']) ?>
+            <?= Html::a('Редактировать', ['update', 'id' => $model->id], [
+                'class' => 'btn btn-primary',
+                'title' => 'Редактировать данные пользователя',
+            ]) ?>
             <?= Html::a('Сбросить пароль', ['reset-password', 'id' => $model->id], [
                 'class' => 'btn btn-warning',
+                'title' => 'Установить новый временный пароль',
                 'data' => [
-                    'confirm' => 'Вы уверены, что хотите сбросить пароль этого пользователя?',
+                    'confirm' => 'Вы уверены, что хотите сбросить пароль этого пользователя? Будет установлен временный пароль.',
                     'method' => 'post',
                 ],
             ]) ?>
             <?= Html::a('Удалить', ['delete', 'id' => $model->id], [
                 'class' => 'btn btn-danger',
+                'title' => 'Удалить пользователя из системы',
                 'data' => [
-                    'confirm' => 'Вы уверены, что хотите удалить этого пользователя?',
+                    'confirm' => 'Вы уверены, что хотите удалить этого пользователя? Данные будут потеряны.',
                     'method' => 'post',
                 ],
             ]) ?>
@@ -47,8 +52,15 @@ if (Yii::$app->user->identity && Yii::$app->user->identity->isAdministrator()) {
     <?php elseif (Yii::$app->user->identity && Yii::$app->user->identity->id == $model->id): ?>
         <!-- Кнопки для собственного профиля -->
         <p>
-            <?= Html::a('Редактировать профиль', ['update', 'id' => $model->id], ['class' => 'btn btn-primary']) ?>
-            <?= Html::a('Выйти', ['/site/logout'], ['class' => 'btn btn-secondary', 'data-method' => 'post']) ?>
+            <?= Html::a('Редактировать профиль', ['update', 'id' => $model->id], [
+                'class' => 'btn btn-primary',
+                'title' => 'Изменить данные профиля (ФИО, email, пароль)',
+            ]) ?>
+            <?= Html::a('Выйти', ['/site/logout'], [
+                'class' => 'btn btn-secondary',
+                'title' => 'Выйти из системы',
+                'data-method' => 'post',
+            ]) ?>
         </p>
     <?php endif; ?>
 

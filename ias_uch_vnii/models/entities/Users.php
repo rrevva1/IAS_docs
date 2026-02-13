@@ -119,6 +119,11 @@ class Users extends \yii\db\ActiveRecord implements IdentityInterface
         return $this->hasRoleCode('user');
     }
 
+    public function isOperator(): bool
+    {
+        return $this->hasRoleCode('operator');
+    }
+
     private function hasRoleCode(string $code): bool
     {
         $codes = Roles::find()

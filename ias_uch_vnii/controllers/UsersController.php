@@ -13,6 +13,7 @@ use yii\web\NotFoundHttpException;
 use yii\filters\VerbFilter;
 use yii\filters\AccessControl;
 use yii\helpers\ArrayHelper;
+use app\components\AuditLog;
 use Yii;
 
 /**
@@ -34,18 +35,28 @@ class UsersController extends Controller
                     'class' => AccessControl::class,
                     'rules' => [
                         [
-                            'actions' => ['index', 'create', 'update', 'delete', 'test', 'index2', 'arm-create', 'get-grid-data'],
+                            'actions' => ['reset-password'],
                             'allow' => true,
                             'roles' => ['@'],
-                            
+                            'matchCallback' => function () {
+                                return Yii::$app->user->identity && Yii::$app->user->identity->isAdministrator();
+                            },
+                        ],
+                        [
+                            'actions' => ['index', 'create', 'update', 'delete', 'arm-create', 'get-grid-data'],
+                            'allow' => true,
+                            'roles' => ['@'],
                         ],
                         [
                             'actions' => ['view'],
                             'allow' => true,
                             'roles' => ['@'],
                         ],
+                        [
+                            'actions' => ['test-passwords', 'index2'],
+                            'allow' => false,
+                        ],
                     ],
-                    
                 ],
                 'verbs' => [
                     'class' => VerbFilter::className(),
@@ -146,14 +157,15 @@ class UsersController extends Controller
     public function actionCreate()
     {
         $model = new Users();
-        
-	/** Устанавливаем сценарий создания для правильной валидации */
-	$model->setScenario('create');
+        $model->setScenario('create');
 
         if ($this->request->isPost) {
             if ($model->load($this->request->post()) && $model->save()) {
-return $this->redirect(['view', 'id' => $model->id]);
-        }
+                Yii::$app->session->setFlash('success', 'Пользователь успешно создан.');
+                return $this->redirect(['view', 'id' => $model->id]);
+            }
+            $errors = $model->getFirstErrors();
+            Yii::$app->session->setFlash('error', 'Не удалось создать пользователя: ' . implode(' ', $errors ?: ['проверьте введённые данные']));
         } else {
             $model->loadDefaultValues();
         }
@@ -161,7 +173,6 @@ return $this->redirect(['view', 'id' => $model->id]);
         return $this->render('create', [
             'model' => $model,
         ]);
-
     }
 
     /**
@@ -173,10 +184,21 @@ return $this->redirect(['view', 'id' => $model->id]);
      */
     public function actionUpdate($id)
     {
-        $model = $this->findModel($id);
+        /** Обычный пользователь может редактировать только свой профиль */
+        if (!Yii::$app->user->identity->isAdmin() && (int) $id !== (int) Yii::$app->user->id) {
+            throw new \yii\web\ForbiddenHttpException('У вас нет прав для редактирования данных других пользователей.');
+        }
 
-        if ($this->request->isPost && $model->load($this->request->post()) && $model->save()) {
-            return $this->redirect(['view', 'id' => $model->id]);
+        $model = $this->findModel($id);
+        $model->setScenario('update');
+
+        if ($this->request->isPost && $model->load($this->request->post())) {
+            if ($model->save()) {
+                Yii::$app->session->setFlash('success', 'Изменения пользователя успешно сохранены.');
+                return $this->redirect(['view', 'id' => $model->id]);
+            }
+            $errors = $model->getFirstErrors();
+            Yii::$app->session->setFlash('error', 'Не удалось сохранить изменения: ' . implode(' ', $errors ?: ['проверьте введённые данные']));
         }
 
         return $this->render('update', [
@@ -193,8 +215,10 @@ return $this->redirect(['view', 'id' => $model->id]);
      */
     public function actionDelete($id)
     {
-        $this->findModel($id)->delete();
-
+        $model = $this->findModel($id);
+        $name = $model->full_name;
+        $model->delete();
+        Yii::$app->session->setFlash('success', "Пользователь «{$name}» успешно удалён.");
         return $this->redirect(['index']);
     }
 
@@ -281,6 +305,7 @@ return $this->redirect(['view', 'id' => $model->id]);
         $user->setPassword($newPassword);
         
         if ($user->save(false)) {
+            AuditLog::log('user.password_reset', 'user', $user->id, 'success', ['target_user_id' => $user->id]);
             Yii::$app->session->setFlash('success', "Пароль пользователя {$user->full_name} сброшен. Новый пароль: {$newPassword}");
         } else {
             Yii::$app->session->setFlash('error', 'Ошибка при сбросе пароля');
@@ -290,61 +315,19 @@ return $this->redirect(['view', 'id' => $model->id]);
     }
 
     /**
-     * Тестирование хешей паролей
-     * Проверяет формат сохраненных паролей для отладки
-     * 
-     * @return void Выводит информацию и завершает выполнение
+     * Тестирование хешей паролей — отключено в production (доступ запрещён).
      */
     public function actionTestPasswords()
     {
-        echo "<h2>Тестирование хешей паролей</h2>";
-        
-        $users = Users::find()->where(['not', ['password_hash' => null]])->all();
-        
-        foreach ($users as $user) {
-            echo "<h3>Пользователь ID: {$user->id}, Email: {$user->email}</h3>";
-            echo "<p>Хеш: " . substr($user->password_hash, 0, 20) . "...</p>";
-            
-            /** Проверяем формат хеша пароля */
-            if (strlen($user->password_hash) === 32 && ctype_xdigit($user->password_hash)) {
-                echo "<p style='color: orange;'>Формат: MD5 (старый)</p>";
-            } else {
-                try {
-                    Yii::$app->security->validatePassword('test', $user->password_hash);
-                    echo "<p style='color: green;'>Формат: Yii2 Security (новый)</p>";
-                } catch (\Exception $e) {
-                    echo "<p style='color: red;'>Формат: ПОВРЕЖДЕННЫЙ - " . $e->getMessage() . "</p>";
-                }
-            }
-            echo "<hr>";
-        }
-        
-        die;
+        throw new \yii\web\ForbiddenHttpException('Доступ запрещён.');
     }
-    
+
     /**
-     * Альтернативное представление списка пользователей
-     * Тестовая страница для проверки отображения данных
-     * 
-     * @return string
+     * Альтернативное представление списка — отключено (доступ запрещён).
      */
     public function actionIndex2()
     {
-        $searchModel = new UsersSearch();
-        $dataProvider = $searchModel->search($this->request->queryParams);
-        $gridColumns = [
-            ['class' => 'yii\grid\SerialColumn'],
-            'id',
-            'full_name',
-            'email',
-            'role_id',
-            'password_hash',
-        ];
-        return $this->render('index2', [
-            'searchModel' => $searchModel,
-            'dataProvider' => $dataProvider,
-            'gridColumns' => $gridColumns,
-        ]);
+        throw new \yii\web\ForbiddenHttpException('Доступ запрещён.');
     }
 }
 

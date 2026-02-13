@@ -82,6 +82,18 @@ if (!Yii::$app->user->isGuest && Yii::$app->user->identity) {
                     'label' => '<i class="fas fa-desktop"></i><span class="nav-text">    Учет ТС</span>',
                     'url' => ['/arm/index'],
                 ];
+                $navItems[] = [
+                    'label' => '<i class="fas fa-history"></i><span class="nav-text">    Журнал аудита</span>',
+                    'url' => ['/audit/index'],
+                ];
+                $navItems[] = [
+                    'label' => '<i class="fas fa-upload"></i><span class="nav-text">    Импорт ОУ</span>',
+                    'url' => ['/import/index'],
+                ];
+                $navItems[] = [
+                    'label' => '<i class="fas fa-copyright"></i><span class="nav-text">    ПО и лицензии</span>',
+                    'url' => ['/software/index'],
+                ];
             }
                 $navItems[] = [
                     'label' => '<i class="fas fa-file"></i><span class="nav-text">    Заявки</span>',

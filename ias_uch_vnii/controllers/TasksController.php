@@ -9,6 +9,9 @@ use app\models\entities\Equipment;
 use app\models\search\TasksSearch;
 use app\models\dictionaries\DicTaskStatus;
 use app\models\entities\DeskAttachments;
+use app\models\entities\TaskAttachments;
+use app\models\entities\TaskHistory;
+use app\components\AuditLog;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use yii\filters\VerbFilter;
@@ -77,8 +80,12 @@ class TasksController extends Controller
      */
     public function actionView($id)
     {
+        $model = $this->findModel($id);
+        if (!$this->canUserAccessTask($model)) {
+            throw new \yii\web\ForbiddenHttpException('Нет доступа к этой заявке.');
+        }
         return $this->render('view', [
-            'model' => $this->findModel($id),
+            'model' => $model,
         ]);
     }
 
@@ -113,9 +120,8 @@ class TasksController extends Controller
                 }
                 
                 if ($model->save()) {
-                    /** Загружаем файлы после сохранения задачи */
                     $model->uploadFiles();
-                    
+                    AuditLog::log('task.create', 'task', $model->id, 'success');
                     Yii::$app->session->setFlash('success', 'Заявка успешно создана.');
                     
                     /** Если это AJAX запрос, устанавливаем заголовок перенаправления */
@@ -133,7 +139,21 @@ class TasksController extends Controller
 
         return $this->render('create', [
             'model' => $model,
+            'equipmentList' => $this->getEquipmentList(),
         ]);
+    }
+
+    private function getEquipmentList(): array
+    {
+        $rows = Equipment::find()
+            ->where(['is_archived' => false])
+            ->orderBy(['inventory_number' => SORT_ASC])
+            ->all();
+        $list = [];
+        foreach ($rows as $e) {
+            $list[$e->id] = $e->inventory_number . ' — ' . ($e->name ?: 'Без названия');
+        }
+        return $list;
     }
 
     /**
@@ -204,9 +224,9 @@ class TasksController extends Controller
             $model->loadDefaultValues();
         }
 
-        /** Рендерим только форму без layout для модального окна */
         return $this->renderAjax('_form', [
             'model' => $model,
+            'equipmentList' => $this->getEquipmentList(),
         ]);
     }
 
@@ -220,15 +240,14 @@ class TasksController extends Controller
     public function actionUpdate($id)
     {
         $model = $this->findModel($id);
-
+        if (!$this->canUserAccessTask($model)) {
+            throw new \yii\web\ForbiddenHttpException('Нет доступа к этой заявке.');
+        }
         if ($this->request->isPost && $model->load($this->request->post())) {
-            /** Загружаем новые файлы из запроса */
             $model->uploadFiles = UploadedFile::getInstances($model, 'uploadFiles');
-            
             if ($model->save()) {
-                /** Загружаем файлы после успешного сохранения модели */
                 $model->uploadFiles();
-                
+                AuditLog::log('task.update', 'task', $model->id, 'success');
                 Yii::$app->session->setFlash('success', 'Заявка успешно обновлена.');
                 return $this->redirect(['view', 'id' => $model->id]);
             }
@@ -236,6 +255,7 @@ class TasksController extends Controller
 
         return $this->render('update', [
             'model' => $model,
+            'equipmentList' => $this->getEquipmentList(),
         ]);
     }
 
@@ -249,15 +269,16 @@ class TasksController extends Controller
     public function actionDelete($id)
     {
         $model = $this->findModel($id);
-        
-        /** Удаляем все вложения перед удалением задачи */
+        if (!Yii::$app->user->identity || !Yii::$app->user->identity->isAdministrator()) {
+            throw new \yii\web\ForbiddenHttpException('Удаление заявки разрешено только администратору.');
+        }
+        $taskId = $model->id;
         $attachments = $model->getAllAttachments();
         foreach ($attachments as $attachment) {
             $attachment->delete();
         }
-        
         $model->delete();
-        
+        AuditLog::log('task.delete', 'task', $taskId, 'success');
         Yii::$app->session->setFlash('success', 'Заявка успешно удалена.');
         return $this->redirect(['index']);
     }
@@ -273,13 +294,15 @@ class TasksController extends Controller
     public function actionDeleteAttachment($taskId, $attachmentId)
     {
         $model = $this->findModel($taskId);
+        if (!$this->canUserAccessTask($model)) {
+            throw new \yii\web\ForbiddenHttpException('Нет доступа к этой заявке.');
+        }
         $attachment = DeskAttachments::findOne($attachmentId);
-        
         if ($attachment) {
             $model->removeAttachment($attachmentId);
             $model->save(false);
             $attachment->delete();
-            
+            AuditLog::log('attachment.delete', 'attachment', $attachmentId, 'success', ['task_id' => $model->id]);
             Yii::$app->session->setFlash('success', 'Вложение успешно удалено.');
         } else {
             Yii::$app->session->setFlash('error', 'Вложение не найдено.');
@@ -289,41 +312,76 @@ class TasksController extends Controller
     }
 
     /**
-     * Скачивание вложения
-     * Отправляет файл пользователю для скачивания
-     * 
+     * Проверка доступа к заявке: автор, исполнитель или администратор.
+     * @param Tasks $task
+     * @return bool
+     */
+    private function canUserAccessTask($task)
+    {
+        if (Yii::$app->user->isGuest) {
+            return false;
+        }
+        $userId = (int) Yii::$app->user->id;
+        if ($task->requester_id == $userId || $task->executor_id == $userId) {
+            return true;
+        }
+        $identity = Yii::$app->user->identity;
+        return $identity && ($identity->isAdministrator() || $identity->isOperator());
+    }
+
+    /**
+     * Возвращает заявку, к которой привязано вложение, или null.
+     * @param int $attachmentId
+     * @return Tasks|null
+     */
+    private function getTaskByAttachmentId($attachmentId)
+    {
+        $link = TaskAttachments::find()
+            ->where(['attachment_id' => (int) $attachmentId])
+            ->with('task')
+            ->one();
+        return $link ? $link->task : null;
+    }
+
+    /**
+     * Скачивание вложения. Доступ только при наличии прав на заявку.
      * @param int $attachmentId ID вложения
      * @return \yii\web\Response
      */
     public function actionDownloadAttachment($attachmentId)
     {
         $attachment = DeskAttachments::findOne($attachmentId);
-        
         if (!$attachment || !$attachment->fileExists()) {
             throw new NotFoundHttpException('Файл не найден.');
         }
-        
-        return Yii::$app->response->sendFile($attachment->getFullPath(), $attachment->original_name);
+        $task = $this->getTaskByAttachmentId($attachmentId);
+        if (!$task || !$this->canUserAccessTask($task)) {
+            throw new \yii\web\ForbiddenHttpException('Нет доступа к этому вложению.');
+        }
+        $response = Yii::$app->response;
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        return $response->sendFile($attachment->getFullPath(), $attachment->original_name);
     }
 
     /**
-     * Предпросмотр файла в браузере (изображения и PDF)
-     * Отправляет файл с заголовком inline для отображения в браузере
-     * 
+     * Предпросмотр файла в браузере. SVG и опасные типы — только скачивание.
+     * Доступ только при наличии прав на заявку.
      * @param int $id ID вложения
      * @return \yii\web\Response
      */
     public function actionPreview($id)
     {
         $attachment = DeskAttachments::findOne($id);
-        
         if (!$attachment || !$attachment->fileExists()) {
             throw new NotFoundHttpException('Файл не найден.');
         }
-        
+        $task = $this->getTaskByAttachmentId($id);
+        if (!$task || !$this->canUserAccessTask($task)) {
+            throw new \yii\web\ForbiddenHttpException('Нет доступа к этому вложению.');
+        }
         $extension = strtolower((string) $attachment->file_extension);
-        
-        /** Определяем MIME-тип файла по расширению */
+        $dangerousInline = ['svg'];
+        $forceDownload = in_array($extension, $dangerousInline, true);
         $mimeTypes = [
             'pdf' => 'application/pdf',
             'png' => 'image/png',
@@ -333,33 +391,37 @@ class TasksController extends Controller
             'bmp' => 'image/bmp',
             'svg' => 'image/svg+xml',
         ];
-        
         $mimeType = $mimeTypes[$extension] ?? 'application/octet-stream';
-        
         $response = Yii::$app->response;
         $response->headers->set('Content-Type', $mimeType);
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        if ($forceDownload) {
+            $response->headers->set('Content-Disposition', 'attachment; filename="' . $attachment->original_name . '"');
+            return $response->sendFile($attachment->getFullPath(), $attachment->original_name);
+        }
         $response->headers->set('Content-Disposition', 'inline; filename="' . $attachment->original_name . '"');
         $response->headers->set('Cache-Control', 'public, max-age=3600');
-        
         return $response->sendFile($attachment->getFullPath(), $attachment->original_name, ['inline' => true]);
     }
 
     /**
-     * Скачивание файла вложения
-     * Отправляет файл пользователю для скачивания
-     * 
+     * Скачивание файла вложения. Доступ только при наличии прав на заявку.
      * @param int $id ID вложения
      * @return \yii\web\Response
      */
     public function actionDownload($id)
     {
         $attachment = DeskAttachments::findOne($id);
-        
         if (!$attachment || !$attachment->fileExists()) {
             throw new NotFoundHttpException('Файл не найден.');
         }
-        
-        return Yii::$app->response->sendFile($attachment->getFullPath(), $attachment->original_name);
+        $task = $this->getTaskByAttachmentId($id);
+        if (!$task || !$this->canUserAccessTask($task)) {
+            throw new \yii\web\ForbiddenHttpException('Нет доступа к этому вложению.');
+        }
+        $response = Yii::$app->response;
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        return $response->sendFile($attachment->getFullPath(), $attachment->original_name);
     }
 
     /**
@@ -372,18 +434,21 @@ class TasksController extends Controller
     public function actionChangeStatus($id)
     {
         Yii::$app->response->format = Response::FORMAT_JSON;
-        
         try {
             $model = $this->findModel($id);
-            
+            if (!$this->canUserAccessTask($model)) {
+                return ['success' => false, 'message' => 'Нет доступа к этой заявке.'];
+            }
             if ($this->request->isPost) {
             $statusId = $this->request->post('status_id');
             $status = DicTaskStatus::findOne($statusId);
             
             if ($status) {
+                $oldStatus = $model->status_id;
                 $model->status_id = $statusId;
                 $model->updated_at = date('Y-m-d H:i:s');
                 if ($model->save(false)) {
+                    TaskHistory::log($model->id, 'status_id', (string) $oldStatus, (string) $statusId);
                     return [
                         'success' => true,
                         'message' => 'Статус успешно изменен.',
@@ -415,10 +480,11 @@ class TasksController extends Controller
     public function actionAssignExecutor($id)
     {
         Yii::$app->response->format = Response::FORMAT_JSON;
-        
         try {
             $model = $this->findModel($id);
-            
+            if (!$this->canUserAccessTask($model)) {
+                return ['success' => false, 'message' => 'Нет доступа к этой заявке.'];
+            }
             if ($this->request->isPost) {
             $executorId = $this->request->post('executor_id');
             
@@ -433,10 +499,11 @@ class TasksController extends Controller
                 }
             }
             
+            $oldExecutor = $model->executor_id;
             $model->executor_id = $executorId ?: null;
             $model->updated_at = date('Y-m-d H:i:s');
-            
             if ($model->save(false)) {
+                TaskHistory::log($model->id, 'executor_id', (string) $oldExecutor, (string) $model->executor_id);
                 $executorName = $executorId ? Users::findOne($executorId)->full_name : 'Не назначен';
                 return [
                     'success' => true,
@@ -468,16 +535,18 @@ class TasksController extends Controller
     public function actionUpdateComment($id)
     {
         Yii::$app->response->format = Response::FORMAT_JSON;
-        
         try {
             $model = $this->findModel($id);
-            
+            if (!$this->canUserAccessTask($model)) {
+                return ['success' => false, 'message' => 'Нет доступа к этой заявке.'];
+            }
             if ($this->request->isPost) {
             $comment = $this->request->post('comment');
+            $oldComment = $model->comment;
             $model->comment = $comment;
             $model->updated_at = date('Y-m-d H:i:s');
-            
             if ($model->save(false)) {
+                TaskHistory::log($model->id, 'comment', $oldComment, $comment);
                 return [
                     'success' => true,
                     'message' => 'Комментарий успешно обновлен.'
@@ -844,9 +913,14 @@ class TasksController extends Controller
     public function actionGetUserEquipment($userId)
     {
         Yii::$app->response->format = Response::FORMAT_JSON;
-        
+        $userId = (int) $userId;
+        $currentId = Yii::$app->user->isGuest ? null : (int) Yii::$app->user->id;
+        $identity = Yii::$app->user->identity;
+        $canAccessOther = $identity && ($identity->isAdministrator() || $identity->isOperator());
+        if ($currentId === null || ($userId !== $currentId && !$canAccessOther)) {
+            throw new \yii\web\ForbiddenHttpException('Доступ к технике другого пользователя запрещён.');
+        }
         try {
-            /** Получаем всю технику пользователя с загруженными связями */
             $equipment = Equipment::find()
                 ->where(['responsible_user_id' => $userId])
                 ->with(['location'])

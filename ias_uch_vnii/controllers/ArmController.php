@@ -3,10 +3,12 @@
 namespace app\controllers;
 
 use app\models\entities\Equipment;
+use app\models\entities\EquipHistory;
 use app\models\entities\Users;
 use app\models\entities\Location;
 use app\models\dictionaries\DicEquipmentStatus;
 use app\models\search\ArmSearch;
+use app\components\AuditLog;
 use Yii;
 use yii\filters\AccessControl;
 use yii\filters\VerbFilter;
@@ -30,21 +32,29 @@ class ArmController extends Controller
                 'class' => AccessControl::class,
                 'rules' => [
                     [
+                        'actions' => ['view', 'update'],
+                        'allow' => true,
+                        'roles' => ['@'],
+                    ],
+                    [
+                        'actions' => ['index', 'create', 'get-grid-data', 'delete', 'archive'],
                         'allow' => true,
                         'roles' => ['@'],
                         'matchCallback' => function () {
-                            return !Yii::$app->user->isGuest && Yii::$app->user->identity && Yii::$app->user->identity->isAdministrator();
+                            return Yii::$app->user->identity && Yii::$app->user->identity->isAdministrator();
                         },
                     ],
                 ],
                 'denyCallback' => function () {
-                    throw new \yii\web\ForbiddenHttpException('Доступ разрешен только администраторам.');
+                    throw new \yii\web\ForbiddenHttpException('Доступ запрещён.');
                 },
             ],
             'verbs' => [
                 'class' => VerbFilter::class,
                 'actions' => [
                     'delete' => ['POST'],
+                    'update' => ['GET', 'POST'],
+                    'archive' => ['POST'],
                 ],
             ],
         ];
@@ -222,6 +232,8 @@ class ArmController extends Controller
         $statuses = DicEquipmentStatus::getList();
 
         if ($model->load(Yii::$app->request->post()) && $model->save()) {
+            EquipHistory::log($model->id, 'create', null, ['inventory_number' => $model->inventory_number, 'name' => $model->name]);
+            AuditLog::log('equipment.create', 'equipment', $model->id, 'success');
             Yii::$app->session->setFlash('success', 'Техника успешно добавлена.');
             return $this->redirect(['index']);
         }
@@ -232,6 +244,106 @@ class ArmController extends Controller
             'locations' => $locations,
             'statuses' => $statuses,
         ]);
+    }
+
+    /**
+     * Просмотр карточки актива.
+     */
+    public function actionView($id)
+    {
+        $model = $this->findModel((int) $id);
+        $this->ensureCanAccessEquipment($model);
+        $chars = $this->loadPartCharValuesByEquipment([$model->id]);
+        $history = EquipHistory::find()
+            ->where(['equipment_id' => $model->id])
+            ->orderBy(['changed_at' => SORT_DESC])
+            ->limit(20)
+            ->all();
+        return $this->render('view', [
+            'model' => $model,
+            'chars' => $chars[$model->id] ?? [],
+            'history' => $history,
+        ]);
+    }
+
+    /**
+     * Редактирование карточки актива.
+     */
+    public function actionUpdate($id)
+    {
+        $model = $this->findModel((int) $id);
+        $this->ensureCanAccessEquipment($model);
+        $users = ArrayHelper::map(
+            Users::find()->orderBy(['full_name' => SORT_ASC])->all(),
+            'id',
+            function (Users $u) { return $u->getDisplayName(); }
+        );
+        $locations = ArrayHelper::map(Location::find()->orderBy(['name' => SORT_ASC])->all(), 'id', 'name');
+        $statuses = DicEquipmentStatus::getList();
+        if ($model->load(Yii::$app->request->post())) {
+            $oldStatus = $model->getOldAttribute('status_id');
+            $oldLocation = $model->getOldAttribute('location_id');
+            $oldResponsible = $model->getOldAttribute('responsible_user_id');
+            if ($model->save()) {
+                $eventType = 'update';
+                if ($oldLocation !== $model->location_id) {
+                    EquipHistory::log($model->id, 'move', ['location_id' => $oldLocation], ['location_id' => $model->location_id]);
+                }
+                if ($oldResponsible !== $model->responsible_user_id) {
+                    EquipHistory::log($model->id, $model->responsible_user_id ? 'assign' : 'unassign', ['responsible_user_id' => $oldResponsible], ['responsible_user_id' => $model->responsible_user_id]);
+                }
+                if ($oldStatus !== $model->status_id) {
+                    EquipHistory::log($model->id, 'status_change', ['status_id' => $oldStatus], ['status_id' => $model->status_id]);
+                }
+                if ($oldStatus === $model->status_id && $oldLocation === $model->location_id && $oldResponsible === $model->responsible_user_id) {
+                    EquipHistory::log($model->id, 'update', null, ['inventory_number' => $model->inventory_number, 'name' => $model->name]);
+                }
+                AuditLog::log('equipment.update', 'equipment', $model->id, 'success');
+                Yii::$app->session->setFlash('success', 'Данные обновлены.');
+                return $this->redirect(['view', 'id' => $model->id]);
+            }
+        }
+        return $this->render('update', [
+            'model' => $model,
+            'users' => $users,
+            'locations' => $locations,
+            'statuses' => $statuses,
+        ]);
+    }
+
+    /**
+     * Архивирование актива (вывод из актуального учета).
+     */
+    public function actionArchive($id)
+    {
+        $model = $this->findModel((int) $id);
+        $this->ensureCanAccessEquipment($model);
+        $reason = Yii::$app->request->post('archive_reason', '');
+        $model->is_archived = true;
+        $model->archived_at = date('Y-m-d H:i:s');
+        $model->archive_reason = $reason;
+        if ($model->save(false)) {
+            EquipHistory::log($model->id, 'archive', ['is_archived' => false], ['is_archived' => true], $reason);
+            Yii::$app->session->setFlash('success', 'Актив архивирован.');
+        } else {
+            Yii::$app->session->setFlash('error', 'Ошибка при архивировании.');
+        }
+        return $this->redirect(['view', 'id' => $model->id]);
+    }
+
+    private function ensureCanAccessEquipment(Equipment $model): void
+    {
+        $user = Yii::$app->user->identity;
+        if (!$user) {
+            throw new \yii\web\ForbiddenHttpException('Доступ запрещён.');
+        }
+        if ($user->isAdministrator()) {
+            return;
+        }
+        if ((int) $model->responsible_user_id === (int) $user->id) {
+            return;
+        }
+        throw new \yii\web\ForbiddenHttpException('Нет доступа к этой карточке актива.');
     }
 
     /**
