@@ -35,8 +35,13 @@ class TasksSearch extends Tasks
     public function search($params)
     {
         $query = Tasks::find()->joinWith(['requester', 'executor', 'status']);
-        if (!Yii::$app->user->identity->isAdministrator()) {
-            $query->where(['tasks.requester_id' => Yii::$app->user->id]);
+        // Администратор и оператор видят все заявки; пользователь — только свои и где он исполнитель
+        if (!Yii::$app->user->identity->isAdministrator() && !Yii::$app->user->identity->isOperator()) {
+            $query->andWhere([
+                'or',
+                ['tasks.requester_id' => Yii::$app->user->id],
+                ['tasks.executor_id' => Yii::$app->user->id],
+            ]);
         }
 
         $dataProvider = new ActiveDataProvider([

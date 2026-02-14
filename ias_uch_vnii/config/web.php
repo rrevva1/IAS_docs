@@ -16,6 +16,10 @@ $config = [
             // !!! вставьте секретный ключ ниже (если он пустой) - это требуется для валидации cookie
             'cookieValidationKey' => '3657f4cb43c013948a1c51cb152714f88b2ead4726a47e4dfe7cf758e20723cd',
         ],
+        // Разные имена cookie сессии по порту: на 8080 и 8081 — отдельные сессии (две учётки в браузере).
+        'session' => [
+            'name' => 'PHPSESSID_' . (isset($_SERVER['SERVER_PORT']) ? $_SERVER['SERVER_PORT'] : '80'),
+        ],
         'cache' => [
             'class' => 'yii\caching\FileCache',
         ],
@@ -23,6 +27,11 @@ $config = [
             'identityClass' => 'app\models\entities\Users',
             'enableAutoLogin' => true,
             'loginUrl' => ['site/login'],
+            // Разные cookie автологина по порту — выход на одном порту не сбрасывает вход на другом
+            'identityCookie' => [
+                'name' => '_identity_' . (isset($_SERVER['SERVER_PORT']) ? $_SERVER['SERVER_PORT'] : '80'),
+                'httpOnly' => true,
+            ],
         ],
         'errorHandler' => [
             'errorAction' => 'site/error',

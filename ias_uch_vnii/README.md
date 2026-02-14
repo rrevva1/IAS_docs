@@ -64,6 +64,10 @@ chmod -R 775 web/assets web/uploads runtime
 
 # 6. Запуск
 php yii serve --port=8080
+
+# Две учётные записи одновременно (два порта — две сессии):
+./scripts/serve-two-ports.sh
+# Откройте http://localhost:8080 и http://localhost:8081, войдите под разными пользователями.
 ```
 
 Подробнее: **[docs/guides/QUICKSTART.md](docs/guides/QUICKSTART.md)**
