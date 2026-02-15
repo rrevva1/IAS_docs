@@ -1,0 +1,44 @@
+# Запуск всего проекта (приложение + БД). Запускать из папки docker: docker compose up -d
+# Приложение: http://localhost:8000
+# Переменные (пароль БД и т.д.) задаются в .env или через окружение; см. .env.example
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-12345}
+      POSTGRES_DB: ${POSTGRES_DB:-ias_vniic}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+      - ../db/ias_vniic_14_02_26.sql:/docker-entrypoint-initdb.d/dump.sql.skip:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ias_vniic}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  php:
+    image: yiisoftware/yii2-php:7.4-apache
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:-ias_vniic}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-12345}
+    volumes:
+      - composer_cache:/root/.composer/cache
+      - ../ias_uch_vnii:/app:delegated
+    ports:
+      - "${APP_PORT:-8000}:80"
+
+volumes:
+  pgdata:
+  composer_cache:

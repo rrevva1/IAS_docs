@@ -160,7 +160,7 @@ alwaysApply: true
 ├── codeception.yml     # Конфигурация Codeception (тесты)
 ├── composer.json       # PHP зависимости
 ├── composer.lock       # Зафиксированные версии PHP зависимостей
-├── docker-compose.yml  # Конфигурация Docker
+├── (Docker: папка docker/ в корне репозитория)
 ├── LICENSE.md          # Лицензия проекта
 ├── package.json        # NPM зависимости (для AG Grid и др.)
 ├── package-lock.json   # Зафиксированные версии NPM зависимостей

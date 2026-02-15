@@ -155,7 +155,7 @@
 ├── composer.json               # Зависимости PHP
 ├── package.json                # Зависимости JavaScript
 ├── codeception.yml             # Конфигурация тестирования
-├── docker-compose.yml          # Docker конфигурация
+├── (Docker: см. папку docker/ в корне проекта)
 ├── yii                         # Консольный скрипт Yii (Linux/Mac)
 ├── yii.bat                     # Консольный скрипт Yii (Windows)
 │

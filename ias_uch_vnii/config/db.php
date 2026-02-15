@@ -1,10 +1,18 @@
 <?php
 
+// В Docker задаются переменные окружения (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD).
+// Локально можно не задавать — используются значения по умолчанию.
+$host = getenv('DB_HOST') ?: 'localhost';
+$port = getenv('DB_PORT') ?: '5432';
+$dbname = getenv('DB_NAME') ?: 'ias_vniic';
+$username = getenv('DB_USER') ?: 'postgres';
+$password = getenv('DB_PASSWORD') ?: '12345';
+
 return [
     'class' => 'yii\db\Connection',
-    'dsn' => 'pgsql:host=localhost;port=5432;dbname=ias_vniic',
-    'username' => 'postgres',
-    'password' => '12345',
+    'dsn' => "pgsql:host={$host};port={$port};dbname={$dbname}",
+    'username' => $username,
+    'password' => $password,
     'charset' => 'utf8',
     // Целевая схема в БД — tech_accounting.
     // По умолчанию Yii2 для PostgreSQL считает defaultSchema = public,
