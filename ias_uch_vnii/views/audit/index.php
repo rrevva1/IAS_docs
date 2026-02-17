@@ -71,10 +71,6 @@ $this->params['breadcrumbs'][] = $this->title;
     </div>
     <?php ActiveForm::end(); ?>
 
-    <p class="text-muted small">
-        Если записей нет, загрузите тестовые данные: <code>psql -U postgres -d ias_vniic -f tests/seed_audit_only.sql</code> (см. <code>tests/LOAD_TEST_DATA_FROM_DUMP.md</code>).
-    </p>
-
     <div id="agGridAuditContainer" class="ag-theme-quartz" style="width: 100%; height: 65vh; min-height: 400px;">
         <div class="text-center p-4 text-muted">
             <span class="glyphicon glyphicon-refresh glyphicon-spin"></span>

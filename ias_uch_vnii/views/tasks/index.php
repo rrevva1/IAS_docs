@@ -62,18 +62,6 @@ $this->registerJs("
                 'class' => 'btn btn-outline-secondary',
                 'onclick' => 'refreshGrid()'
             ]) ?>
-            
-            <?php if ($isAdmin): ?>
-                <?= Html::button('<i class="glyphicon glyphicon-check"></i> Выбрать все', [
-                    'class' => 'btn btn-outline-secondary',
-                    'onclick' => 'selectAllRows()'
-                ]) ?>
-                
-                <?= Html::button('<i class="glyphicon glyphicon-unchecked"></i> Снять выбор', [
-                    'class' => 'btn btn-outline-secondary',
-                    'onclick' => 'deselectAllRows()'
-                ]) ?>
-            <?php endif; ?>
         </div>
         
         <div class="btn-group">

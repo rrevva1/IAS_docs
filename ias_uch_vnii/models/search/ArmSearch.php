@@ -47,7 +47,7 @@ class ArmSearch extends Model
             'query' => $query,
             'pagination' => ['pageSize' => 20],
             'sort' => [
-                'defaultOrder' => ['id' => SORT_DESC],
+                'defaultOrder' => ['id' => SORT_ASC],
                 'attributes' => ['id', 'name', 'responsible_user_id', 'location_id', 'created_at', 'inventory_number'],
             ],
         ]);

@@ -106,10 +106,11 @@ class ArmController extends Controller
         Yii::$app->response->format = Response::FORMAT_JSON;
         try {
             $params = Yii::$app->request->queryParams;
-            // Вкладки передают equipment_type (строка) в корне; ArmSearch ожидает ArmSearch[equipment_type]
-            if (array_key_exists('equipment_type', $params)) {
+            // Вкладки передают equipment_type в корне; ArmSearch ожидает ArmSearch[equipment_type]. Для «Вся техника» не передаём пустое значение.
+            $eqType = isset($params['equipment_type']) ? trim((string) $params['equipment_type']) : '';
+            if ($eqType !== '') {
                 $params['ArmSearch'] = $params['ArmSearch'] ?? [];
-                $params['ArmSearch']['equipment_type'] = $params['equipment_type'];
+                $params['ArmSearch']['equipment_type'] = $eqType;
             }
             $searchModel = new ArmSearch();
             $dataProvider = $searchModel->search($params);

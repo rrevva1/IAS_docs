@@ -27,11 +27,12 @@ $equipmentTypes = $equipmentTypes ?? [];
             <?= Html::button('<i class="glyphicon glyphicon-transfer"></i> Переместить/Переназначить', [
                 'class' => 'btn btn-primary',
                 'id' => 'btnReassignArm',
-                'style' => 'display:none;',
+                'title' => 'Выберите одну или несколько строк в таблице, затем нажмите',
             ]) ?>
         </div>
     </div>
 
+    <p class="text-muted small mb-2">Чтобы переместить или переназначить технику — отметьте <strong>чекбоксы слева</strong> у нужных строк, затем нажмите кнопку «Переместить/Переназначить».</p>
     <ul class="nav nav-tabs arm-type-tabs mb-3" role="tablist">
         <li class="nav-item">
             <a class="nav-link active arm-type-tab" href="#" data-type-id="">Вся техника</a>

@@ -73,6 +73,16 @@
     font-size: 16px;
 }
 
+/* Колонка «Описание»: перенос длинного текста по словам */
+#agGridTasksContainer .ag-cell-description-wrap {
+    white-space: normal !important;
+    word-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.35;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
 /* ============================================
    КАСТОМИЗАЦИЯ ТЕМЫ AG GRID QUARTZ
    ============================================ */

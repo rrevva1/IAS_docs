@@ -196,16 +196,10 @@ function initializeAgGrid() {
             filter: true,
             resizable: true,
             editable: false,
-            floatingFilter: isAdmin,
+            floatingFilter: false, // только полное меню фильтра по клику на иконку (как на Учет ТС)
         },
-        // Новый синтаксис rowSelection для AG Grid v32.2+
-        rowSelection: isAdmin ? {
-            mode: 'multiRow',
-            checkboxes: true,
-            headerCheckbox: true,
-        } : {
-            mode: 'singleRow',
-        },
+        // Без чекбоксов: выбор строки по клику (как в Пользователях)
+        rowSelection: { mode: 'singleRow' },
         pagination: true,
         paginationPageSize: 20,
         paginationPageSizeSelector: [10, 20, 50, 100],
@@ -238,31 +232,35 @@ function initializeAgGrid() {
         },
         fullWidthCellRenderer: EquipmentDetailRenderer,
         
-        // Автоматическая подстройка высоты для Full Width Row (детальной панели)
+        // Высота строки: для обычных — по длине описания (перенос), для детальной панели — по контенту
         getRowHeight: function(params) {
-            // Для обычных строк используем стандартную высоту
-            if (!params.node.data || !params.node.data.isDetailRow) {
-                return undefined; // стандартная высота
+            if (!params.node.data) {
+                return undefined;
             }
-            
-            // Для детальной панели рассчитываем высоту динамически
-            const equipmentData = params.node.data.equipmentData || [];
-            
-            if (equipmentData.length === 0) {
-                // Если техники нет - минимальная высота для сообщения
-                return 120;
+            // Детальная панель (техника)
+            if (params.node.data.isDetailRow) {
+                const equipmentData = params.node.data.equipmentData || [];
+                if (equipmentData.length === 0) {
+                    return 120;
+                }
+                const headerHeight = 60;
+                const tableHeaderHeight = 45;
+                const rowHeight = 45;
+                const padding = 40;
+                const totalHeight = headerHeight + tableHeaderHeight + (equipmentData.length * rowHeight) + padding;
+                return Math.min(totalHeight, 600);
             }
-            
-            // Рассчитываем высоту: заголовок + строки таблицы + отступы
-            const headerHeight = 60; // заголовок "Техника работника"
-            const tableHeaderHeight = 45; // заголовок таблицы
-            const rowHeight = 45; // высота одной строки таблицы
-            const padding = 40; // внутренние отступы контейнера
-            
-            const totalHeight = headerHeight + tableHeaderHeight + (equipmentData.length * rowHeight) + padding;
-            
-            // Ограничиваем максимальную высоту
-            return Math.min(totalHeight, 600);
+            // Обычная строка: увеличить высоту при длинном описании (перенос текста)
+            const desc = params.node.data.description;
+            if (desc && typeof desc === 'string' && desc.length > 0) {
+                const lineHeight = 20;
+                const charsPerLine = 55; // приблизительно при типичной ширине колонки
+                const lines = Math.min(Math.ceil(desc.length / charsPerLine), 6); // не более 6 строк
+                if (lines > 1) {
+                    return Math.max(40, 12 + lines * lineHeight);
+                }
+            }
+            return undefined; // стандартная высота
         },
     };
     
@@ -556,17 +554,34 @@ function EquipmentDetailRenderer(params) {
 function getColumnDefinitions() {
     const columns = [];
     
-    // Чекбокс для администраторов (теперь управляется через rowSelection в gridOptions)
+    // Порядок как в Пользователях: первый столбец — кнопка «+» (техника), затем ID
     if (isAdmin) {
+        // 1) Плюсик в первом столбце (как в Пользователях)
         columns.push({
+            colId: 'equipment_toggle',
             headerName: '',
-            width: 50,
+            field: 'equipment_toggle',
+            width: 56,
+            minWidth: 48,
             pinned: 'left',
             filter: false,
-            // checkboxSelection и headerCheckboxSelection перенесены в rowSelection
+            floatingFilter: false,
+            sortable: false,
+            cellRenderer: function(params) {
+                if (params.data && params.data.isDetailRow) {
+                    return '';
+                }
+                const taskId = params.data.id;
+                const userId = params.data.user_id;
+                const isExpanded = params.node.data._equipmentExpanded || false;
+                const title = isExpanded ? 'Скрыть технику' : 'Показать технику работника';
+                const btnClass = isExpanded ? 'equipment-toggle-btn equipment-toggle-btn--expanded' : 'equipment-toggle-btn';
+                const symbol = isExpanded ? '−' : '+';
+                return '<button class="' + btnClass + '" data-task-id="' + taskId + '" data-user-id="' + userId + '" aria-label="' + title + '" title="' + title + '"><span class="toggle-icon">' + symbol + '</span></button>';
+            }
         });
-        
-        // ID заявки
+
+        // 2) ID заявки (с фильтром)
         columns.push({
             headerName: 'ID',
             field: 'id',
@@ -574,55 +589,22 @@ function getColumnDefinitions() {
             pinned: 'left',
             filter: 'agNumberColumnFilter',
             cellRenderer: function(params) {
-                return `<a href="/index.php?r=tasks/view&id=${params.value}">${params.value}</a>`;
-            }
-        });
-        
-        // Кнопка для раскрытия техники работника
-        columns.push({
-            headerName: '',
-            field: 'equipment_toggle',
-            width: 56,
-            minWidth: 48,
-            pinned: 'left',
-            filter: false,
-            sortable: false,
-            cellRenderer: function(params) {
-                // Не показываем кнопку для detail rows
-                if (params.data && params.data.isDetailRow) {
-                    return '';
-                }
-                
-                const taskId = params.data.id;
-                const userId = params.data.user_id;
-                const isExpanded = params.node.data._equipmentExpanded || false;
-                const title = isExpanded ? 'Скрыть технику' : 'Показать технику работника';
-                const btnClass = isExpanded ? 'equipment-toggle-btn equipment-toggle-btn--expanded' : 'equipment-toggle-btn';
-                const symbol = isExpanded ? '&minus;' : '+'; // используем текст, чтобы точно было видно
-
-                return `
-                    <button class="${btnClass}" 
-                            data-task-id="${taskId}" 
-                            data-user-id="${userId}"
-                            aria-label="${title}"
-                            title="${title}">
-                        <span class="toggle-icon">${symbol}</span>
-                    </button>
-                `;
+                return '<a href="/index.php?r=tasks/view&id=' + params.value + '">' + params.value + '</a>';
             }
         });
     }
     
-    // Описание
+    // Описание — перенос по словам для объёмного текста
     columns.push({
         headerName: 'Описание',
         field: 'description',
         flex: 2,
         minWidth: 250,
         filter: 'agTextColumnFilter',
+        wrapText: true,
+        cellClass: 'ag-cell-description-wrap',
         cellRenderer: function(params) {
-            const text = params.value || '';
-            return text.length > 100 ? text.substring(0, 100) + '...' : text;
+            return params.value != null ? String(params.value) : '';
         },
         tooltipField: 'description',
     });

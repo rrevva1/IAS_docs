@@ -20,16 +20,15 @@
         return [
             {
                 headerName: '',
-                field: 'checkbox',
-                width: 50,
-                minWidth: 50,
-                maxWidth: 50,
+                width: 48,
+                minWidth: 48,
+                maxWidth: 48,
                 checkboxSelection: true,
                 headerCheckboxSelection: true,
                 sortable: false,
                 filter: false,
+                resizable: false,
                 pinned: 'left',
-                lockPosition: true,
             },
             { headerName: 'Пользователь', field: 'user_name', flex: 1, minWidth: 140, filter: 'agTextColumnFilter' },
             { headerName: 'Помещение', field: 'location_name', width: 110, filter: 'agTextColumnFilter' },
@@ -148,24 +147,12 @@
 
     function updateReassignButton() {
         const btn = document.getElementById('btnReassignArm');
-        if (!btn) {
-            console.warn('Кнопка btnReassignArm не найдена');
-            return;
-        }
-        if (!gridApi) {
-            console.warn('gridApi не инициализирован');
-            btn.style.display = 'none';
-            return;
-        }
-        try {
-            const selected = gridApi.getSelectedRows() || [];
-            const shouldShow = selected.length > 0;
-            btn.style.display = shouldShow ? '' : 'none';
-            console.log('Обновление кнопки перезакрепления. Выбрано строк:', selected.length, 'Показать:', shouldShow, 'Selected rows:', selected);
-        } catch (err) {
-            console.error('Ошибка при обновлении кнопки перезакрепления:', err);
-            btn.style.display = 'none';
-        }
+        if (!btn) return;
+        const selected = gridApi ? gridApi.getSelectedRows() : [];
+        btn.disabled = selected.length === 0;
+        btn.title = selected.length > 0
+            ? 'Переместить или переназначить выбранную технику (' + selected.length + ')'
+            : 'Выберите одну или несколько строк в таблице (чекбокс слева), затем нажмите';
     }
 
     function initTabs() {
@@ -183,33 +170,14 @@
     function initReassign() {
         var btn = document.getElementById('btnReassignArm');
         if (btn) {
-            console.log('Инициализация кнопки перезакрепления');
+            btn.disabled = true;
             btn.addEventListener('click', function() {
-                console.log('Клик по кнопке перезакрепления');
-                if (!gridApi) {
-                    console.error('gridApi не доступен');
-                    alert('Таблица еще не загружена. Подождите немного.');
-                    return;
-                }
-                var rows = gridApi.getSelectedRows() || [];
-                console.log('Выбрано строк:', rows.length);
+                var rows = gridApi ? gridApi.getSelectedRows() : [];
                 if (rows.length === 0) {
-                    alert('Выберите хотя бы одну строку для перезакрепления.');
+                    alert('Выберите одну или несколько единиц техники в таблице (отметьте чекбоксы слева от строк), затем нажмите кнопку снова.');
                     return;
                 }
-                var ids = rows.map(function(r) { 
-                    if (!r || !r.id) {
-                        console.warn('Строка без ID:', r);
-                        return null;
-                    }
-                    return r.id; 
-                }).filter(function(id) { return id !== null; });
-                
-                console.log('ID выбранных единиц техники:', ids);
-                if (ids.length === 0) {
-                    alert('Не удалось получить ID выбранных единиц техники.');
-                    return;
-                }
+                var ids = rows.map(function(r) { return r.id; });
                 if (typeof window.openReassignModal === 'function') {
                     window.openReassignModal(ids);
                 } else {
@@ -244,37 +212,13 @@
             sideBar: 'columns',
             onGridReady: function(params) {
                 gridApi = params.api;
-                console.log('AG Grid готов, gridApi:', gridApi);
                 loadGridData();
                 initTabs();
                 initReassign();
-                // Вызываем обновление кнопки после загрузки данных
-                setTimeout(function() {
-                    updateReassignButton();
-                }, 500);
+                updateReassignButton();
             },
-            onSelectionChanged: function(params) {
-                try {
-                    var api = params.api || (params.getSelectedRows ? params : null);
-                    if (!api && params && typeof params.getSelectedRows === 'function') {
-                        api = params;
-                    }
-                    if (!api && gridApi) {
-                        api = gridApi;
-                    }
-                    var selected = api && api.getSelectedRows ? api.getSelectedRows() : [];
-                    console.log('Событие onSelectionChanged, выбрано строк:', selected.length, 'Selected IDs:', selected.map(function(r) { return r ? r.id : null; }));
-                    // Принудительно обновляем кнопку с небольшой задержкой для надежности
-                    setTimeout(function() {
-                        updateReassignButton();
-                    }, 10);
-                } catch (err) {
-                    console.error('Ошибка в onSelectionChanged:', err);
-                    // Все равно пытаемся обновить кнопку
-                    setTimeout(function() {
-                        updateReassignButton();
-                    }, 10);
-                }
+            onSelectionChanged: function() {
+                updateReassignButton();
             },
         };
         agGrid.createGrid(container, gridOpts);
