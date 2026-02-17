@@ -41,7 +41,7 @@ class ArmController extends Controller
                         'roles' => ['@'],
                     ],
                     [
-                        'actions' => ['index', 'create', 'get-grid-data', 'delete', 'archive', 'reassign'],
+                        'actions' => ['index', 'create', 'get-grid-data', 'delete', 'archive', 'reassign', 'get-selected-info'],
                         'allow' => true,
                         'roles' => ['@'],
                         'matchCallback' => function () {
@@ -60,6 +60,7 @@ class ArmController extends Controller
                     'update' => ['GET', 'POST'],
                     'archive' => ['POST'],
                     'reassign' => ['POST'],
+                    'get-selected-info' => ['POST'],
                 ],
             ],
         ];
@@ -123,6 +124,7 @@ class ArmController extends Controller
                     'id' => $model->id,
                     'user_name' => $model->responsibleUser ? $model->responsibleUser->getDisplayName() : '',
                     'location_name' => $model->location ? $model->location->name : '',
+                    'status_name' => $model->equipmentStatus ? $model->equipmentStatus->status_name : '',
                     'cpu' => $chars['cpu'] ?? '',
                     'ram' => $chars['ram'] ?? '',
                     'disk' => $chars['disk'] ?? '',
@@ -399,6 +401,73 @@ class ArmController extends Controller
     }
 
     /**
+     * Получение информации о выбранных единицах техники для модального окна перезакрепления.
+     * POST: ids[] (массив id оборудования)
+     */
+    public function actionGetSelectedInfo()
+    {
+        Yii::$app->response->format = Response::FORMAT_JSON;
+        $ids = Yii::$app->request->post('ids', []);
+        if (!is_array($ids)) {
+            $ids = array_filter([(int) $ids]);
+        }
+        $ids = array_map('intval', array_filter($ids));
+        if (empty($ids)) {
+            return ['success' => false, 'message' => 'Не выбрано ни одной единицы техники.', 'data' => [], 'summary' => []];
+        }
+
+        $equipment = Equipment::find()
+            ->where(['id' => $ids])
+            ->with(['responsibleUser', 'location', 'equipmentStatus'])
+            ->all();
+
+        $data = [];
+        $responsibleUsers = [];
+        $locations = [];
+        $statuses = [];
+
+        foreach ($equipment as $eq) {
+            $item = [
+                'id' => $eq->id,
+                'inventory_number' => $eq->inventory_number,
+                'name' => $eq->name,
+                'responsible_user_id' => $eq->responsible_user_id,
+                'responsible_user_name' => $eq->responsibleUser ? $eq->responsibleUser->getDisplayName() : null,
+                'location_id' => $eq->location_id,
+                'location_name' => $eq->location ? $eq->location->name : null,
+                'status_id' => $eq->status_id,
+                'status_name' => $eq->equipmentStatus ? $eq->equipmentStatus->status_name : null,
+            ];
+            $data[] = $item;
+
+            if ($eq->responsible_user_id) {
+                $responsibleUsers[$eq->responsible_user_id] = $eq->responsibleUser ? $eq->responsibleUser->getDisplayName() : null;
+            }
+            if ($eq->location_id) {
+                $locations[$eq->location_id] = $eq->location ? $eq->location->name : null;
+            }
+            if ($eq->status_id) {
+                $statuses[$eq->status_id] = $eq->equipmentStatus ? $eq->equipmentStatus->status_name : null;
+            }
+        }
+
+        $summary = [
+            'total' => count($data),
+            'unique_responsible_users' => count($responsibleUsers),
+            'unique_locations' => count($locations),
+            'unique_statuses' => count($statuses),
+            'has_responsible' => count(array_filter($data, function($item) { return $item['responsible_user_id'] !== null; })),
+            'without_responsible' => count(array_filter($data, function($item) { return $item['responsible_user_id'] === null; })),
+        ];
+
+        return [
+            'success' => true,
+            'data' => $data,
+            'summary' => $summary,
+        ];
+    }
+
+    /**
      * Массовое/одиночное переназначение техники (пользователь, локация, статус).
      * POST: ids[] (массив id оборудования), responsible_user_id?, location_id?, status_id?
      */
@@ -419,19 +488,27 @@ class ArmController extends Controller
         $statusId = Yii::$app->request->post('status_id');
 
         $updated = 0;
+        $responsibleUserChanged = 0;
+        $locationChanged = 0;
+        $statusChanged = 0;
+        $errors = [];
+
         foreach ($ids as $id) {
             $model = Equipment::findOne($id);
             if (!$model) {
+                $errors[] = ['equipment_id' => $id, 'message' => 'Оборудование не найдено'];
                 continue;
             }
             $changed = false;
             if ($responsibleUserId !== null && $responsibleUserId !== '') {
-                $newUser = (int) $responsibleUserId;
+                // Если передан пустая строка (снятие назначения), устанавливаем null
+                $newUser = ($responsibleUserId === '' || $responsibleUserId === '0') ? null : (int) $responsibleUserId;
                 if ($model->responsible_user_id !== $newUser) {
                     $oldUser = $model->responsible_user_id;
-                    $model->responsible_user_id = $newUser ?: null;
+                    $model->responsible_user_id = $newUser;
                     EquipHistory::log($model->id, $model->responsible_user_id ? 'assign' : 'unassign', ['responsible_user_id' => $oldUser], ['responsible_user_id' => $model->responsible_user_id]);
                     $changed = true;
+                    $responsibleUserChanged++;
                 }
             }
             if ($locationId !== null && $locationId !== '') {
@@ -441,6 +518,7 @@ class ArmController extends Controller
                     $model->location_id = $newLoc;
                     EquipHistory::log($model->id, 'move', ['location_id' => $oldLoc], ['location_id' => $model->location_id]);
                     $changed = true;
+                    $locationChanged++;
                 }
             }
             if ($statusId !== null && $statusId !== '') {
@@ -450,11 +528,16 @@ class ArmController extends Controller
                     $model->status_id = $newStatus;
                     EquipHistory::log($model->id, 'status_change', ['status_id' => $oldStatus], ['status_id' => $model->status_id]);
                     $changed = true;
+                    $statusChanged++;
                 }
             }
-            if ($changed && $model->save(false)) {
-                $updated++;
-                AuditLog::log('equipment.reassign', 'equipment', $model->id, 'success');
+            if ($changed) {
+                if ($model->save(false)) {
+                    $updated++;
+                    AuditLog::log('equipment.reassign', 'equipment', $model->id, 'success');
+                } else {
+                    $errors[] = ['equipment_id' => $id, 'message' => 'Ошибка при сохранении'];
+                }
             }
         }
 
@@ -462,6 +545,12 @@ class ArmController extends Controller
             'success' => true,
             'message' => "Обновлено единиц техники: {$updated} из " . count($ids),
             'updated' => $updated,
+            'details' => [
+                'responsible_user_changed' => $responsibleUserChanged,
+                'location_changed' => $locationChanged,
+                'status_changed' => $statusChanged,
+                'errors' => $errors,
+            ],
         ];
     }
 

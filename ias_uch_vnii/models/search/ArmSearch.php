@@ -41,7 +41,7 @@ class ArmSearch extends Model
 
     public function search(array $params): ActiveDataProvider
     {
-        $query = Equipment::find()->with(['responsibleUser', 'location']);
+        $query = Equipment::find()->with(['responsibleUser', 'location', 'equipmentStatus']);
 
         $dataProvider = new ActiveDataProvider([
             'query' => $query,
